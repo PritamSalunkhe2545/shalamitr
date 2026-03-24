@@ -1,9 +1,10 @@
 "use client"
 
-import { UserButton } from "@clerk/nextjs"
+import dynamic from "next/dynamic"
 import { usePathname } from "next/navigation"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 const routeLabels: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -15,6 +16,30 @@ const routeLabels: Record<string, string> = {
   "/certificates": "Certificates",
 }
 
+// Only load Clerk's UserButton when Clerk is actually configured
+const ClerkUserButton = dynamic(
+  () =>
+    import("@clerk/nextjs").then((mod) => ({
+      default: mod.UserButton,
+    })),
+  {
+    ssr: false,
+    loading: () => <PlaceholderAvatar />,
+  }
+)
+
+function PlaceholderAvatar() {
+  return (
+    <Avatar className="h-8 w-8">
+      <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+        PS
+      </AvatarFallback>
+    </Avatar>
+  )
+}
+
+const hasClerk = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
 export function AppHeader() {
   const pathname = usePathname()
   const label = routeLabels[pathname] ?? "Shalamitr"
@@ -25,7 +50,7 @@ export function AppHeader() {
       <Separator orientation="vertical" className="mr-2 h-4" />
       <span className="font-medium text-sm">{label}</span>
       <div className="ml-auto">
-        <UserButton />
+        {hasClerk ? <ClerkUserButton /> : <PlaceholderAvatar />}
       </div>
     </header>
   )
