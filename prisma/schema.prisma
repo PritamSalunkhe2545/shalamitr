@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  TRANSFERRED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HOLIDAY
+}
+
+enum CertificateType {
+  BONAFIDE
+  LEAVING
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+// ─── Core Models ──────────────────────────────────────────────────────────────
+
+model Student {
+  id String @id @default(cuid())
+
+  // Identity
+  firstName   String
+  lastName    String
+  dateOfBirth DateTime
+  gender      Gender
+  photoUrl    String?
+
+  // Academic
+  rollNumber      String
+  className       String // "Nursery", "LKG", "UKG", "1", "2" ... "8"
+  section         String        @default("A")
+  admissionDate   DateTime      @default(now())
+  admissionNumber String        @unique
+
+  // Address
+  address String
+  city    String @default("Dondaicha")
+  state   String @default("Maharashtra")
+  pincode String?
+
+  // Parent/Guardian
+  fatherName     String
+  motherName     String
+  guardianPhone  String
+  alternatePhone String?
+  guardianEmail  String?
+
+  // Status
+  status        StudentStatus @default(ACTIVE)
+  leavingDate   DateTime?
+  leavingReason String?
+
+  // Relations
+  feeRecords   FeeRecord[]
+  attendance   Attendance[]
+  certificates Certificate[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([className, section])
+  @@index([rollNumber, className])
+  @@index([status])
+  @@index([guardianPhone])
+}
+
+model FeeStructure {
+  id           String  @id @default(cuid())
+  className    String
+  academicYear String // "2024-25"
+  totalAmount  Decimal @db.Decimal(10, 2)
+  description  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([className, academicYear])
+  @@index([academicYear])
+}
+
+model FeeRecord {
+  id String @id @default(cuid())
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+
+  amount        Decimal  @db.Decimal(10, 2)
+  paymentDate   DateTime @default(now())
+  receiptNumber String   @unique
+  academicYear  String // "2024-25"
+
+  // Payment metadata
+  paymentMethod String? // "Cash", "UPI", "Cheque"
+  remarks       String?
+
+  // Who recorded this (Clerk user ID)
+  recordedBy String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([academicYear])
+  @@index([paymentDate])
+  @@index([receiptNumber])
+}
+
+model Attendance {
+  id String @id @default(cuid())
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+
+  date    DateTime         @db.Date
+  status  AttendanceStatus @default(PRESENT)
+  remarks String?
+
+  // Who marked this
+  markedBy String // Clerk user ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, date]) // One record per student per day
+  @@index([date])
+  @@index([studentId, date])
+}
+
+model Certificate {
+  id String @id @default(cuid())
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+
+  type CertificateType
+
+  // Content snapshot at time of generation (student data may change later)
+  snapshotData Json
+
+  // Storage
+  fileUrl String? // Supabase Storage URL after upload
+
+  // Metadata
+  serialNumber String   @unique // e.g. "BON-2024-0042"
+  issuedDate   DateTime @default(now())
+  issuedBy     String // Clerk user ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([type])
+}
